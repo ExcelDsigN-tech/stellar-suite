@@ -93,7 +93,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
     defineTheme(monaco);
 
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, async () => {
+      if (language === "rust") {
+        await editor.getAction("editor.action.formatDocument")?.run();
+      }
       onSave?.();
     });
 
@@ -105,6 +108,37 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       applyReveal(pendingRangeRef.current);
       pendingRangeRef.current = null;
     }
+
+    // Register Rust formatting provider
+    monaco.languages.registerDocumentFormattingEditProvider("rust", {
+      provideDocumentFormattingEdits: async (model) => {
+        const code = model.getValue();
+        try {
+          const response = await fetch("/api/format", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error("Formatting failed:", errorData.details || errorData.error);
+            return []; // Fail gracefully, don't wipe content
+          }
+
+          const { formattedCode } = await response.json();
+          return [
+            {
+              range: model.getFullModelRange(),
+              text: formattedCode,
+            },
+          ];
+        } catch (error) {
+          console.error("Formatting API error:", error);
+          return [];
+        }
+      },
+    });
   };
 
   // Monaco's height is controlled by the parent container in this layout.
