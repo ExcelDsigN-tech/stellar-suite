@@ -12,6 +12,7 @@ import { DeploymentsView } from "@/components/ide/DeploymentsView";
 import { EditorTabs } from "@/components/ide/EditorTabs";
 import { FileExplorer } from "@/components/ide/FileExplorer";
 import { IdentitiesView } from "@/components/ide/IdentitiesView";
+import { OracleAssistant } from "@/components/ide/OracleAssistant";
 import { SearchPane } from "@/components/ide/SearchPane";
 import { SecurityView } from "@/components/ide/SecurityView";
 import { StatusBar } from "@/components/ide/StatusBar";
@@ -484,6 +485,7 @@ export default function Index() {
                 lastAuditRunAt={lastAuditRunAt}
               />
             ) : null}
+            {leftSidebarTab === "oracle" ? <OracleAssistant /> : null}
           </aside>
         ) : null}
 

@@ -24,7 +24,8 @@ export type SidebarTab =
   | "deployments"
   | "identities"
   | "search"
-  | "security";
+  | "security"
+  | "oracle";
 export type BuildState = "idle" | "building" | "success" | "error";
 
 interface WorkspaceState {
