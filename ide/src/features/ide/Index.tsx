@@ -5,6 +5,7 @@ import { FileExplorer } from "@/components/ide/FileExplorer";
 import { EditorTabs } from "@/components/ide/EditorTabs";
 import CodeEditor from "@/components/ide/CodeEditor";
 import { Terminal } from "@/components/ide/Terminal";
+import { TestResultsLog } from "@/components/terminal/TestResultsLog";
 import { Toolbar } from "@/components/ide/Toolbar";
 import { AssistantSidebar } from "@/components/ide/AssistantSidebar";
 import { ContractPanel } from "@/components/ide/ContractPanel";
@@ -29,6 +30,14 @@ import { DeploymentsView } from "@/components/ide/DeploymentsView";
 import { useDeployedContractsStore } from "@/store/useDeployedContractsStore";
 import { useWalletStore } from "@/store/walletStore";
 import { createInvocationDebugData, type InvocationDebugData } from "@/lib/invokeResult";
+import {
+  createSimulatedCargoTestOutput,
+  formatTestRunForTerminal,
+  parseStructuredTestOutput,
+  resolveWorkspacePathForTrace,
+  toRevealRange,
+  type TestRunResult,
+} from "@/lib/testResults";
 import {
   FileText,
   FolderTree,
@@ -84,20 +93,9 @@ const flattenProjectFiles = (nodes: FileNode[], parentPath: string[] = []) =>
   });
 
 const Index = () => {
-  const [terminalExpanded, setTerminalExpanded] = useState(true);
-  const [terminalOutput, setTerminalOutput] = useState("");
-  const [isCompiling, setIsCompiling] = useState(false);
-  const [contractId, setContractId] = useState<string | null>(null);
   const [lastInvocation, setLastInvocation] = useState<InvocationDebugData | null>(null);
-  const [showExplorer, setShowExplorer] = useState(false);
-  const [showPanel, setShowPanel] = useState(false);
-  const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
-  const [saveStatus, setSaveStatus] = useState("");
-  const [mobilePanel, setMobilePanel] = useState<"none" | "explorer" | "interact" | "deployments" | "identities">("none");
-  const [isExplorerDragActive, setIsExplorerDragActive] = useState(false);
-  const [leftSidebarTab, setLeftSidebarTab] = useState<"explorer" | "deployments" | "identities" | "search">("explorer");
   const [invokeState, setInvokeState] = useState<InvokeState>({ phase: "idle", message: "Invoke" });
-  const dragDepthRef = useRef(0);
+  const [testRun, setTestRun] = useState<TestRunResult | null>(null);
 
   const {
     // File System
@@ -123,14 +121,7 @@ const Index = () => {
     customRpcUrl,
     customHeaders,
     setNetwork,
-    setHorizonUrl,
-    setNetworkPassphrase,
-    setCustomRpcUrl,
-    setCustomHeaders,
-
-    // UI Layout
     terminalExpanded,
-    terminalOutput,
     isCompiling,
     buildState,
     contractId,
@@ -158,7 +149,7 @@ const Index = () => {
 
   const { loadIdentities, activeContext, activeIdentity, webWalletPublicKey, setWebWalletPublicKey } = useIdentityStore();
   const { addContract } = useDeployedContractsStore();
-  const { setDiagnostics, clearDiagnostics } = useDiagnosticsStore();
+  const { setDiagnostics } = useDiagnosticsStore();
   const { publicKey: connectedWalletPublicKey, walletType } = useWalletStore();
 
   const dragDepthRef = useRef(0);
@@ -286,12 +277,62 @@ const Index = () => {
   }, [network, appendTerminalOutput, addContract]);
 
   const handleTest = useCallback(() => {
+    const rawOutput = createSimulatedCargoTestOutput({ files, activeTabPath });
+    const nextRun = parseStructuredTestOutput(rawOutput);
+
     setTerminalExpanded(true);
-    appendTerminalOutput("Running tests...\r\n");
-    setTimeout(() => {
-      appendTerminalOutput("✓ test_hello ... ok\r\ntest result: ok. 1 passed; 0 failed;\r\n");
-    }, 1200);
-  }, [appendTerminalOutput]);
+    setTestRun(nextRun);
+    setTerminalOutput(formatTestRunForTerminal(nextRun));
+  }, [activeTabPath, files, setTerminalExpanded, setTerminalOutput]);
+
+  const handleRerunFailedTests = useCallback(() => {
+    const rawOutput = createSimulatedCargoTestOutput({
+      files,
+      activeTabPath,
+      previousRun: testRun,
+      rerunFailedOnly: true,
+    });
+    const nextRun = parseStructuredTestOutput(rawOutput);
+
+    setTerminalExpanded(true);
+    setTestRun(nextRun);
+    setTerminalOutput(formatTestRunForTerminal(nextRun));
+  }, [activeTabPath, files, setTerminalExpanded, setTerminalOutput, testRun]);
+
+  const handleOpenTestTrace = useCallback(
+    (traceFile: string, line: number, column = 1) => {
+      const pathParts = resolveWorkspacePathForTrace(traceFile, files);
+      if (!pathParts) {
+        setTerminalExpanded(true);
+        setTerminalOutput((currentOutput) => {
+          const normalizedOutput = currentOutput.endsWith("\r\n") || currentOutput.length === 0
+            ? currentOutput
+            : `${currentOutput}\r\n`;
+
+          return `${normalizedOutput}Unable to resolve ${traceFile}:${line}:${column}\r\n`;
+        });
+        return;
+      }
+
+      addTab(pathParts, pathParts[pathParts.length - 1]);
+      setActiveTabPath(pathParts);
+      window.dispatchEvent(
+        new CustomEvent("ide:reveal-range", {
+          detail: {
+            fileId: pathParts.join("/"),
+            pathParts,
+            range: toRevealRange(line, column),
+          },
+        })
+      );
+    },
+    [addTab, files, setActiveTabPath, setTerminalExpanded, setTerminalOutput]
+  );
+
+  const handleClearTerminal = useCallback(() => {
+    setTerminalOutput("");
+    setTestRun(null);
+  }, [setTerminalOutput]);
 
   const handleInvoke = useCallback(
     async (fn: string, args: string) => {
@@ -711,12 +752,30 @@ const Index = () => {
                   <>
                     <ResizableHandle withHandle />
                     <ResizablePanel id="terminal" order={2} defaultSize={25} minSize={10} className="flex flex-col min-w-0">
-                      <Terminal />
+                      <Terminal
+                        onClear={handleClearTerminal}
+                        supplementaryContent={
+                          <TestResultsLog
+                            result={testRun}
+                            onOpenTrace={handleOpenTestTrace}
+                            onRerunFailed={handleRerunFailedTests}
+                          />
+                        }
+                      />
                     </ResizablePanel>
                   </>
                 ) : (
                   <div className="shrink-0">
-                    <Terminal />
+                    <Terminal
+                      onClear={handleClearTerminal}
+                      supplementaryContent={
+                        <TestResultsLog
+                          result={testRun}
+                          onOpenTrace={handleOpenTestTrace}
+                          onRerunFailed={handleRerunFailedTests}
+                        />
+                      }
+                    />
                   </div>
                 )}
               </ResizablePanelGroup>
@@ -727,18 +786,19 @@ const Index = () => {
         {/* Desktop Right Sidebar */}
         <div className="hidden md:flex shrink-0 z-10">
           {showPanel && (
-            <div className="w-64 border-l border-border bg-card">
-              <ContractPanel contractId={contractId} onInvoke={handleInvoke} invokeState={invokeState} />
-            </div>
-            <div className="w-[22rem] border-l border-border bg-card">
-              <AssistantSidebar
-                activeFile={activeFileContext}
-                contractId={contractId}
-                onInvoke={handleInvoke}
-                lastInvocation={lastInvocation}
-              />
-            </div>
-            </div>
+            <>
+              <div className="w-64 border-l border-border bg-card">
+                <ContractPanel contractId={contractId} onInvoke={handleInvoke} invokeState={invokeState} />
+              </div>
+              <div className="w-[22rem] border-l border-border bg-card">
+                <AssistantSidebar
+                  activeFile={activeFileContext}
+                  contractId={contractId}
+                  onInvoke={handleInvoke}
+                  lastInvocation={lastInvocation}
+                />
+              </div>
+            </>
           )}
           <div className="flex flex-col bg-card border-l border-border h-full">
             <button
@@ -815,6 +875,7 @@ const Index = () => {
         </div>
       </div>
     </IdeShell>
+    </div>
   );
 };
 

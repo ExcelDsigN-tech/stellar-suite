@@ -18,9 +18,26 @@ import {
   ContextMenuItem,
 } from "@/components/ui/context-menu";
 import { FileNode } from "@/lib/sample-contracts";
+import {
+  DROP_LIMIT_BYTES,
+  mapDroppedEntriesToTree,
+  mergeFileNodes,
+  readDropPayload,
+} from "@/lib/file-drop";
 
 interface FileExplorerProps {
+  files?: FileNode[];
   onFileSelect?: (path: string[], file: FileNode) => void;
+  activeFilePath?: string[];
+  onCreateFile?: (parentPath: string[], name: string) => void;
+  onCreateFolder?: (parentPath: string[], name: string) => void;
+  onDeleteNode?: (path: string[]) => void;
+  onRenameNode?: (path: string[], newName: string) => void;
+  isDragActive?: boolean;
+  onDragEnter?: (event: DragEvent<HTMLDivElement>) => void;
+  onDragOver?: (event: DragEvent<HTMLDivElement>) => void;
+  onDragLeave?: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop?: (event: DragEvent<HTMLDivElement>) => void | Promise<void>;
 }
 
 function InlineInput({
@@ -297,11 +314,23 @@ function FileTreeItem({
 }
 
 export function FileExplorer({
+  files: propFiles,
   onFileSelect,
+  activeFilePath: propActiveFilePath,
+  onCreateFile: propOnCreateFile,
+  onCreateFolder: propOnCreateFolder,
+  onDeleteNode: propOnDeleteNode,
+  onRenameNode: propOnRenameNode,
+  isDragActive: propIsDragActive,
+  onDragEnter: propOnDragEnter,
+  onDragOver: propOnDragOver,
+  onDragLeave: propOnDragLeave,
+  onDrop: propOnDrop,
 }: FileExplorerProps) {
   const {
-    files,
+    files: storeFiles,
     activeTabPath,
+    setFiles,
     createFile,
     createFolder,
     deleteNode,
@@ -313,10 +342,80 @@ export function FileExplorer({
     setTerminalExpanded,
     setIsExplorerDragActive,
   } = useWorkspaceStore();
+  const files = propFiles ?? storeFiles;
+  const activeFilePath = propActiveFilePath ?? activeTabPath;
+  const handleCreateFile = propOnCreateFile ?? createFile;
+  const handleCreateFolder = propOnCreateFolder ?? createFolder;
+  const handleDeleteNode = propOnDeleteNode ?? deleteNode;
+  const handleRenameNode = propOnRenameNode ?? renameNode;
+  const isDragActive = propIsDragActive ?? isExplorerDragActive;
 
   const [creatingRoot, setCreatingRoot] = useState<"file" | "folder" | null>(
     null
   );
+
+  const onDragEnter = (event: DragEvent<HTMLDivElement>) => {
+    if (propOnDragEnter) {
+      propOnDragEnter(event);
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setIsExplorerDragActive(true);
+  };
+
+  const onDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (propOnDragOver) {
+      propOnDragOver(event);
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    setIsExplorerDragActive(true);
+  };
+
+  const onDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    if (propOnDragLeave) {
+      propOnDragLeave(event);
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setIsExplorerDragActive(false);
+  };
+
+  const onDrop = async (event: DragEvent<HTMLDivElement>) => {
+    if (propOnDrop) {
+      await propOnDrop(event);
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setIsExplorerDragActive(false);
+
+    try {
+      const dropped = await readDropPayload(event.dataTransfer);
+      const { nodes, uploadedFiles, skippedFiles, totalBytes } = await mapDroppedEntriesToTree(dropped);
+
+      if (uploadedFiles === 0) {
+        setTerminalExpanded(true);
+        setTerminalOutput((prev) => `${prev}Upload skipped. No eligible files found (limit ${(DROP_LIMIT_BYTES / (1024 * 1024)).toFixed(0)} MB).\r\n`);
+        return;
+      }
+
+      setFiles(mergeFileNodes(files, nodes));
+      setTerminalExpanded(true);
+      setTerminalOutput((prev) => `${prev}Uploaded ${uploadedFiles} file${uploadedFiles === 1 ? "" : "s"} (${(totalBytes / 1024).toFixed(1)} KB).\r\n`);
+      if (skippedFiles > 0) {
+        setTerminalOutput((prev) => `${prev}Skipped ${skippedFiles} file${skippedFiles === 1 ? "" : "s"} (ignored folders or upload limit).\r\n`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      setTerminalExpanded(true);
+      setTerminalOutput((prev) => `${prev}Upload failed: ${message}\r\n`);
+    }
+  };
 
   const internalFileSelect = (path: string[], file: FileNode) => {
     if (onFileSelect) {
@@ -331,7 +430,7 @@ export function FileExplorer({
   return (
     <div
       id="tour-explorer"
-      className={`h-full bg-sidebar flex flex-col ${isDragActive ? "ring-2 ring-primary/60 ring-inset" : ""}` ${isExplorerDragActive ? "ring-2 ring-primary/60 ring-inset" : ""}}
+      className={`h-full bg-sidebar flex flex-col ${isDragActive ? "ring-2 ring-primary/60 ring-inset" : ""}`}
       onDragEnter={onDragEnter}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -363,8 +462,8 @@ export function FileExplorer({
             depth={0}
             placeholder={creatingRoot === "file" ? "filename.rs" : "folder_name"}
             onSubmit={(name) => {
-              if (creatingRoot === "file") createFile([], name);
-              else createFolder([], name);
+              if (creatingRoot === "file") handleCreateFile([], name);
+              else handleCreateFolder([], name);
               setCreatingRoot(null);
             }}
             onCancel={() => setCreatingRoot(null)}
@@ -378,11 +477,11 @@ export function FileExplorer({
             depth={0}
             path={[]}
             onFileSelect={internalFileSelect}
-            activeFilePath={activeTabPath}
-            onCreateFile={createFile}
-            onCreateFolder={createFolder}
-            onDeleteNode={deleteNode}
-            onRenameNode={renameNode}
+            activeFilePath={activeFilePath}
+            onCreateFile={handleCreateFile}
+            onCreateFolder={handleCreateFolder}
+            onDeleteNode={handleDeleteNode}
+            onRenameNode={handleRenameNode}
           />
         ))}
       </div>

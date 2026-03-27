@@ -8,17 +8,20 @@ export interface TabInfo {
 }
 
 interface EditorTabsProps {
+  tabs?: TabInfo[];
+  activeTab?: string;
   onTabSelect?: (path: string[]) => void;
   onTabClose?: (path: string[]) => void;
 }
 
-export function EditorTabs({ onTabSelect, onTabClose }: EditorTabsProps) {
+export function EditorTabs({ tabs: propTabs, activeTab: propActiveTab, onTabSelect, onTabClose }: EditorTabsProps) {
   const { openTabs, activeTabPath, setActiveTabPath, closeTab, unsavedFiles } = useWorkspaceStore();
-  const tabsWithStatus = openTabs.map((t) => ({
+  const storeTabsWithStatus = openTabs.map((t) => ({
     ...t,
     unsaved: unsavedFiles.has(t.path.join("/")),
   }));
-  const activeTabKey = activeTabPath.join("/");
+  const tabsWithStatus = propTabs ?? storeTabsWithStatus;
+  const activeTabKey = propActiveTab ?? activeTabPath.join("/");
   return (
     <div className="flex bg-secondary border-b border-border overflow-x-auto scrollbar-none">
       {tabsWithStatus.map((tab) => {

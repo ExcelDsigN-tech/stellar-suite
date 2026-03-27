@@ -26,13 +26,14 @@ import { toast } from "sonner";
 interface ContractPanelProps {
   contractId: string | null;
   onInvoke: (fn: string, args: string) => void;
+  lastInvocation?: InvocationDebugData | null;
   invokeState?: {
     phase: "idle" | "preparing" | "signing" | "submitting" | "confirming" | "success" | "failed";
     message: string;
   };
 }
 
-export function ContractPanel({ contractId, onInvoke, invokeState }: ContractPanelProps) {
+export function ContractPanel({ contractId, onInvoke, lastInvocation, invokeState }: ContractPanelProps) {
   const [fnName, setFnName] = useState("hello");
   const [args, setArgs] = useState('"Dev"');
   const [showManager, setShowManager] = useState(false);

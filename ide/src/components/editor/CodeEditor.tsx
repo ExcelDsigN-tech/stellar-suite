@@ -8,11 +8,20 @@ import { analyzeMathSafety } from "../../lib/mathSafetyAnalyzer";
 import { useMathSafetyStore } from "../../store/useMathSafetyStore";
 
 interface CodeEditorProps {
+  content?: string;
+  language?: string;
+  onChange?: (value: string) => void;
   onCursorChange?: (line: number, col: number) => void;
   onSave?: () => void;
 }
 
-const CodeEditor: React.FC<CodeEditorProps> = ({ onCursorChange, onSave }) => {
+const CodeEditor: React.FC<CodeEditorProps> = ({
+  content: propContent,
+  language: propLanguage,
+  onChange: propOnChange,
+  onCursorChange,
+  onSave,
+}) => {
   const { activeTabPath, files, updateFileContent } = useWorkspaceStore();
   const { diagnostics } = useDiagnosticsStore();
   const { config, setMathDiagnostics, getAllDiagnostics } =
@@ -39,9 +48,19 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ onCursorChange, onSave }) => {
 
   const handleEditorChange: OnChange = (value) => {
     if (value !== undefined) {
-      updateFileContent(activeTabPath, value);
+      if (propOnChange) {
+        propOnChange(value);
+      } else {
+        updateFileContent(activeTabPath, value);
+      }
     }
   };
+
+  const editorLanguage =
+    propLanguage ||
+    activeFile?.language ||
+    (activeFile?.name?.endsWith(".toml") ? "toml" : "rust");
+  const editorContent = propContent ?? activeFile?.content ?? "";
 
   // Apply Monaco markers whenever diagnostics or active file changes
   useEffect(() => {
@@ -186,7 +205,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ onCursorChange, onSave }) => {
     }
   };
 
-  if (!activeFile) {
+  if (!activeFile && propContent === undefined) {
     return (
       <div className="h-full flex items-center justify-center bg-[#1e1e2e] text-muted-foreground font-mono text-sm">
         Select a file to begin editing
@@ -208,15 +227,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ onCursorChange, onSave }) => {
       >
         <Editor
           height="100%"
-          defaultLanguage={
-            activeFile.language ||
-            (activeFile.name?.endsWith(".toml") ? "toml" : "rust")
-          }
-          language={
-            activeFile.language ||
-            (activeFile.name?.endsWith(".toml") ? "toml" : "rust")
-          }
-          value={activeFile.content}
+          defaultLanguage={editorLanguage}
+          language={editorLanguage}
+          value={editorContent}
           theme="stellar-dark"
           onChange={handleEditorChange}
           onMount={handleEditorDidMount}

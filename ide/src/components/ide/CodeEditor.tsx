@@ -134,14 +134,15 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
     defineTheme(monaco);
 
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-      if (propOnSave) propOnSave();
-      else markSaved(activeTabPath);
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, async () => {
       if (language === "rust") {
         await editor.getAction("editor.action.formatDocument")?.run();
       }
-      onSave?.();
+      if (propOnSave) {
+        propOnSave();
+      } else {
+        markSaved(activeTabPath);
+      }
     });
 
     editor.onDidChangeCursorPosition((e) => {

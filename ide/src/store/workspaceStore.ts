@@ -1,6 +1,7 @@
 import {
   DEFAULT_CUSTOM_RPC,
   NETWORK_CONFIG,
+  type CustomHeaders,
   NetworkKey,
 } from "@/lib/networkConfig";
 import { FileNode, sampleContracts } from "@/lib/sample-contracts";

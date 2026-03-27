@@ -1,14 +1,25 @@
 import { useMathSafetyStore } from "@/store/useMathSafetyStore";
 import { useWorkspaceStore } from "@/store/workspaceStore";
+import { type NetworkKey } from "@/lib/networkConfig";
 import { GitBranch, Save } from "lucide-react";
 
 import { NetworkSelector } from "./NetworkSelector";
 
 interface StatusBarProps {
   language?: string;
+  line?: number;
+  col?: number;
+  network?: NetworkKey;
+  unsavedCount?: number;
 }
 
-export function StatusBar({ language: propLanguage }: StatusBarProps) {
+export function StatusBar({
+  language: propLanguage,
+  line: propLine,
+  col: propCol,
+  network: propNetwork,
+  unsavedCount: propUnsavedCount,
+}: StatusBarProps) {
   const {
     cursorPos,
     network,
@@ -29,6 +40,10 @@ export function StatusBar({ language: propLanguage }: StatusBarProps) {
     (f) => f.name === activeTabPath[activeTabPath.length - 1],
   );
   const language = propLanguage || activeFile?.language || "rust";
+  const line = propLine ?? cursorPos.line;
+  const col = propCol ?? cursorPos.col;
+  const currentNetwork = propNetwork ?? network;
+  const currentUnsavedCount = propUnsavedCount ?? unsavedFiles.size;
 
   const toggleMathSafety = () => {
     setConfig({ enabled: !config.enabled });
@@ -41,7 +56,7 @@ export function StatusBar({ language: propLanguage }: StatusBarProps) {
           <span className="hidden sm:inline">main</span>
         </div>
         <NetworkSelector
-          network={network}
+          network={currentNetwork}
           horizonUrl={horizonUrl}
           customRpcUrl={customRpcUrl}
           customHeaders={customHeaders}
@@ -61,16 +76,16 @@ export function StatusBar({ language: propLanguage }: StatusBarProps) {
             Math {config.enabled ? "On" : "Off"}
           </span>
         </button>
-        {unsavedFiles.size > 0 && (
+        {currentUnsavedCount > 0 && (
           <div className="flex items-center gap-1 text-primary-foreground/70">
             <Save className="h-2.5 w-2.5" />
-            <span>{unsavedFiles.size} unsaved</span>
+            <span>{currentUnsavedCount} unsaved</span>
           </div>
         )}
       </div>
       <div className="flex items-center gap-2 md:gap-3 px-2 md:px-3 py-0.5">
         <span>
-          Ln {cursorPos.line}, Col {cursorPos.col}
+          Ln {line}, Col {col}
         </span>
         <span className="hidden sm:inline">{language}</span>
         <span className="hidden md:inline">UTF-8</span>
