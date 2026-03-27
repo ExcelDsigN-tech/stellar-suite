@@ -1,22 +1,28 @@
 "use client";
 
-import { DragEvent, useCallback, useEffect, useRef, useState } from "react";
-import { FileExplorer } from "@/components/ide/FileExplorer";
-import { EditorTabs } from "@/components/ide/EditorTabs";
-import CodeEditor from "@/components/ide/CodeEditor";
-import { Terminal } from "@/components/ide/Terminal";
-import { Toolbar } from "@/components/ide/Toolbar";
 import { AssistantSidebar } from "@/components/ide/AssistantSidebar";
+import CodeEditor from "@/components/ide/CodeEditor";
 import { ContractPanel } from "@/components/ide/ContractPanel";
+import { DeploymentsView } from "@/components/ide/DeploymentsView";
+import { EditorTabs } from "@/components/ide/EditorTabs";
+import { FileExplorer } from "@/components/ide/FileExplorer";
 import { IdentitiesView } from "@/components/ide/IdentitiesView";
 import { ProductTour } from "@/components/ide/ProductTour";
-import { StatusBar } from "@/components/ide/StatusBar";
 import { SearchPane } from "@/components/ide/SearchPane";
 import TestExplorer from "@/components/ide/TestExplorer";
 import { IdeShell } from "@/components/layout/IdeShell";
 import { useIdentityStore } from "@/store/useIdentityStore";
 import { flattenWorkspaceFiles, useWorkspaceStore } from "@/store/workspaceStore";
 import { useDiagnosticsStore } from "@/store/useDiagnosticsStore";
+import { StatusBar } from "@/components/ide/StatusBar";
+import { Terminal } from "@/components/ide/Terminal";
+import { Toolbar } from "@/components/ide/Toolbar";
+import { IdeShell } from "@/components/layout/IdeShell";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 import {
   showCompilationFailedToast,
   showCompilationSuccessToast,
@@ -26,6 +32,7 @@ import {
   type InvokePhase,
 } from "@/lib/transactionExecution";
 import {
+
   DROP_LIMIT_BYTES,
   mapDroppedEntriesToTree,
   mergeFileNodes,
@@ -38,8 +45,23 @@ import {
   readCompileResponse,
 } from "@/utils/compileStream";
 import { parseMixedOutput } from "@/utils/cargoParser";
+import {
+  createInvocationDebugData,
+  type InvocationDebugData,
+} from "@/lib/invokeResult";
+import { type NetworkKey } from "@/lib/networkConfig";
+import { RpcService } from "@/lib/rpcService";
+import { ErrorTranslator } from "@/lib/errorTranslator";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { DeploymentsView } from "@/components/ide/DeploymentsView";
+import { FileNode } from "@/lib/sample-contracts";
+import {
+  executeWriteTransaction,
+  type InvokePhase,
+} from "@/lib/transactionExecution";
 import { useDeployedContractsStore } from "@/store/useDeployedContractsStore";
+import { useDiagnosticsStore } from "@/store/useDiagnosticsStore";
+import { useIdentityStore } from "@/store/useIdentityStore";
 import { useWalletStore } from "@/store/walletStore";
 import {
   createInvocationDebugData,
@@ -56,6 +78,14 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { useWorkspaceStore } from "@/store/workspaceStore";
+import { parseMixedOutput } from "@/utils/cargoParser";
+import {
+  createStreamProcessor,
+  readCompileResponse,
+} from "@/utils/compileStream";
+import { PanelRightClose, PanelRightOpen, X } from "lucide-react";
+import { DragEvent, useCallback, useEffect, useRef, useState } from "react";
 
 const COMPILE_API_URL =
   process.env.NEXT_PUBLIC_COMPILE_API_URL ?? "/api/compile";
@@ -107,6 +137,7 @@ const Index = () => {
   const dragDepthRef = useRef(0);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
+
   const {
     files,
     openTabs,
@@ -126,7 +157,12 @@ const Index = () => {
     horizonUrl,
     networkPassphrase,
     customRpcUrl,
+    customHeaders,
     setNetwork,
+    setHorizonUrl,
+    setNetworkPassphrase,
+    setCustomRpcUrl,
+    setCustomHeaders,
 
     terminalExpanded,
     isCompiling,
@@ -190,11 +226,20 @@ const Index = () => {
     return () => mq.removeEventListener("change", handler);
   }, [setShowExplorer, setShowPanel]);
 
+  const handleFileSelect = useCallback(
+    (path: string[], file: FileNode) => {
+      if (file.type !== "file") return;
+      addTab(path, file.name);
+      setMobilePanel("none");
+    },
+    [addTab],
+  );
+
   const handleTabClose = useCallback(
     (path: string[]) => {
       closeTab(path);
     },
-    [closeTab]
+    [closeTab],
   );
 
   const handleContentChange = useCallback(
@@ -202,6 +247,7 @@ const Index = () => {
       updateFileContent(activeTabPath, newContent);
     },
     [activeTabPath, updateFileContent]
+    [activeTabPath, updateFileContent],
   );
 
   const handleSave = useCallback(() => {
@@ -253,6 +299,8 @@ const Index = () => {
       if (!response.ok) {
         throw new Error(
           output.trim() || `Build request failed with status ${response.status}`
+          output.trim() ||
+            `Build request failed with status ${response.status}`,
         );
       }
 
@@ -300,6 +348,10 @@ const Index = () => {
         .substring(0, 56)
         .toUpperCase();
 
+      const fullId =
+        `CD${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`
+          .substring(0, 56)
+          .toUpperCase();
       setContractId(fullId);
       appendTerminalOutput(`✓ Contract deployed! ID: ${fullId}\r\n`);
       addContract(fullId, network as NetworkKey, "hello_world");
@@ -312,6 +364,7 @@ const Index = () => {
     setTimeout(() => {
       appendTerminalOutput(
         "✓ test_hello ... ok\r\ntest result: ok. 1 passed; 0 failed;\r\n"
+        "✓ test_hello ... ok\r\ntest result: ok. 1 passed; 0 failed;\r\n",
       );
     }, 1200);
   }, [appendTerminalOutput, setTerminalExpanded]);
@@ -333,6 +386,13 @@ const Index = () => {
 
       appendTerminalOutput(
         `Invoking write transaction ${fn}(${args}) as ${signer}...\r\n`
+          ? (connectedWalletPublicKey ?? "browser-wallet")
+          : (activeIdentity?.nickname ??
+            activeIdentity?.publicKey ??
+            "anonymous");
+
+      appendTerminalOutput(
+        `Invoking write transaction ${fn}(${args}) as ${signer}...\r\n`,
       );
       setInvokeState({ phase: "preparing", message: "Preparing..." });
 
@@ -386,6 +446,30 @@ const Index = () => {
             ? error.message
             : "Transaction execution failed.";
         appendTerminalOutput(`Transaction failed: ${message}\r\n`);
+              `${status.message}${status.hash ? ` [${status.hash}]` : ""}\r\n`,
+            );
+          },
+        });
+
+        appendTerminalOutput(`Signed XDR submitted to RPC: ${result.hash}\r\n`);
+        appendTerminalOutput(
+          `Transaction reached ${result.finalResponse.status}.\r\n`,
+        );
+        setInvokeState({ phase: "success", message: "Confirmed" });
+      } catch (error) {
+        const translatedError = ErrorTranslator.translate(error, {
+          operation: "write transaction",
+          functionName: fn,
+          contractId,
+        });
+        appendTerminalOutput(
+          ` ${translatedError.title}\n${translatedError.message}\n\nDetails: ${translatedError.details.originalError}\r\n`
+        );
+        if (translatedError.details.suggestions && translatedError.details.suggestions.length > 0) {
+          appendTerminalOutput(
+            `\n💡 Suggestions:\n${translatedError.details.suggestions.map((s) => `  • ${s}`).join("\n")}\r\n`
+          );
+        }
         setInvokeState({ phase: "failed", message: "Failed" });
       } finally {
         setTimeout(() => {
@@ -407,27 +491,158 @@ const Index = () => {
       webWalletPublicKey,
       setTerminalExpanded,
     ]
+    ],
+  );
+
+  const handleInvokeTest = useCallback(
+    async (fn: string, args: string, isSimulation: boolean) => {
+      setTerminalExpanded(true);
+      const signer =
+        activeContext?.type === "web-wallet"
+          ? "browser-wallet"
+          : (activeIdentity?.nickname ?? "anonymous");
+      appendTerminalOutput(`Invoking ${fn}(${args}) as ${signer}...\r\n`);
+      setTimeout(() => {
+        const result = '["Hello", "Dev"]';
+        appendTerminalOutput(`Result: ${result}\r\n`);
+        setLastInvocation(
+          createInvocationDebugData({
+            functionName: fn,
+            args,
+            signer,
+            network,
+            result,
+          }),
+        );
+      }, 800);
+    },
+    [activeContext, activeIdentity, appendTerminalOutput, network],
   );
 
   const handleCreateFile = useCallback(
     (parent: string[], name: string) => {
       createFile(parent, name);
     },
-    [createFile]
+    [createFile],
   );
 
   const handleCreateFolder = useCallback(
     (parent: string[], name: string) => {
       createFolder(parent, name);
     },
-    [createFolder]
+    [createFolder],
+  );
+
+  const handleInvokeWithRpc = useCallback(
+    async (fn: string, args: string, isSimulation: boolean) => {
+      setTerminalExpanded(true);
+      const signer =
+        activeContext?.type === "web-wallet"
+          ? "browser-wallet"
+          : (activeIdentity?.nickname ?? "anonymous");
+      appendTerminalOutput(
+        `${isSimulation ? "Simulating" : "Invoking"} ${fn}(${args}) as ${signer}...\r\n`,
+      );
+
+      try {
+        const parsedArgs = JSON.parse(args);
+        const rpcUrl = network === "local" ? customRpcUrl : horizonUrl;
+        const rpcService = new RpcService(rpcUrl, customHeaders);
+
+        if (isSimulation) {
+          const result = await rpcService.simulateTransaction(
+            contractId!,
+            fn,
+            Array.isArray(parsedArgs) ? parsedArgs : [parsedArgs],
+          );
+          if (result.success) {
+            appendTerminalOutput(`✓ Result: ${JSON.stringify(result.result)}\r\n`);
+          } else {
+            // Use translated error if available, otherwise show raw error
+            if (result.translatedError) {
+              appendTerminalOutput(
+                `❌ ${result.translatedError.title}\n${result.translatedError.message}\n\nDetails: ${result.translatedError.details.originalError}\r\n`
+              );
+              if (result.translatedError.details.suggestions && result.translatedError.details.suggestions.length > 0) {
+                appendTerminalOutput(
+                  `\n💡 Suggestions:\n${result.translatedError.details.suggestions.map((s) => `  • ${s}`).join("\n")}\r\n`
+                );
+              }
+            } else {
+              appendTerminalOutput(`❌ Error: ${result.error}\r\n`);
+            }
+          }
+        } else {
+          // TODO: Implement actual transaction invocation
+          appendTerminalOutput(
+            "Transaction invocation not yet implemented\r\n",
+          );
+        }
+      } catch (error) {
+        const translatedError = ErrorTranslator.translate(error, {
+          operation: isSimulation ? "contract simulation" : "contract invocation",
+          functionName: fn,
+          contractId,
+        });
+        appendTerminalOutput(
+          ` ${translatedError.title}\n${translatedError.message}\n\nDetails: ${translatedError.details.originalError}\r\n`
+        );
+        if (translatedError.details.suggestions && translatedError.details.suggestions.length > 0) {
+          appendTerminalOutput(
+            `\n💡 Suggestions:\n${translatedError.details.suggestions.map((s) => `  • ${s}`).join("\n")}\r\n`
+          );
+        }
+      }
+    },
+    [
+      activeContext,
+      activeIdentity,
+      appendTerminalOutput,
+      network,
+      customRpcUrl,
+      horizonUrl,
+      contractId,
+      customHeaders,
+    ],
   );
 
   const handleRenameNode = useCallback(
     (path: string[], newName: string) => {
       renameNode(path, newName);
     },
-    [renameNode]
+    [renameNode],
+  );
+
+  const handleExplorerDragEnter = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      dragDepthRef.current += 1;
+      setIsExplorerDragActive(true);
+    },
+    [],
+  );
+
+  const handleExplorerDragOver = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "copy";
+      setIsExplorerDragActive(true);
+    },
+    [],
+  );
+
+  const handleExplorerDragLeave = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+      if (dragDepthRef.current === 0) {
+        setIsExplorerDragActive(false);
+      }
+    },
+    [],
   );
 
   const handleExplorerDragEnter = useCallback(
@@ -457,6 +672,7 @@ const Index = () => {
     []
   );
 
+
   const handleExplorerDrop = useCallback(
     async (event: DragEvent<HTMLDivElement>) => {
       event.preventDefault();
@@ -474,6 +690,7 @@ const Index = () => {
               DROP_LIMIT_BYTES /
               (1024 * 1024)
             ).toFixed(0)} MB).\r\n`
+            `Upload skipped. No eligible files found (limit ${(DROP_LIMIT_BYTES / (1024 * 1024)).toFixed(0)} MB).\r\n`,
           );
           return;
         }
@@ -483,6 +700,7 @@ const Index = () => {
           `Uploaded ${uploadedFiles} file${
             uploadedFiles === 1 ? "" : "s"
           } (${(totalBytes / 1024).toFixed(1)} KB).\r\n`
+          `Uploaded ${uploadedFiles} file${uploadedFiles === 1 ? "" : "s"} (${(totalBytes / 1024).toFixed(1)} KB).\r\n`,
         );
 
         if (skippedFiles > 0) {
@@ -490,6 +708,7 @@ const Index = () => {
             `Skipped ${skippedFiles} file${
               skippedFiles === 1 ? "" : "s"
             } (ignored folders or upload limit).\r\n`
+            `Skipped ${skippedFiles} file${skippedFiles === 1 ? "" : "s"} (ignored folders or upload limit).\r\n`,
           );
         }
       } catch (error) {
@@ -502,6 +721,14 @@ const Index = () => {
   );
 
   const getActiveContent = useCallback(() => {
+    [appendTerminalOutput, files, setFiles, setIsExplorerDragActive],
+  );
+
+  const getActiveContent = useCallback((): {
+    content: string;
+    language: string;
+    fileId: string;
+  } => {
     const file = findNode(files, activeTabPath);
     return {
       content: file?.content ?? "// Select a file to begin editing",
@@ -544,6 +771,12 @@ const Index = () => {
         onCompile={handleCompile}
         onDeploy={handleDeploy}
         onTest={handleTest}
+      />
+
+      <IdeShell
+        onCompile={handleCompile}
+        onDeploy={handleDeploy}
+        onTest={handleTest}
         isCompiling={isCompiling}
         buildState={isCompiling ? "building" : "idle"}
         network={network}
@@ -573,6 +806,7 @@ const Index = () => {
         onToggleSidebar={() => setShowExplorer(!showExplorer)}
       >
         <div className="flex-1 flex overflow-hidden relative">
+          {/* Mobile Panels */}
           {mobilePanel === "explorer" && (
             <div className="md:hidden absolute inset-0 z-30 flex">
               <div className="w-64 bg-sidebar border-r border-border h-full flex flex-col">
@@ -644,6 +878,8 @@ const Index = () => {
                     setMobilePanel("none");
                     appendTerminalOutput(
                       `Targeting contract ${id.substring(0, 8)}... on ${net}\r\n`
+
+                      `Targeting contract ${id.substring(0, 8)}... on ${net}\r\n`,
                     );
                   }}
                 />
@@ -786,6 +1022,111 @@ const Index = () => {
             </div>
           </div>
 
+
+          {/* Desktop Main Content */}
+          <div className="flex-1 flex overflow-hidden">
+            <ResizablePanelGroup
+              direction="horizontal"
+              autoSaveId="ide-main-layout"
+            >
+              {showExplorer && (
+                <>
+                  <ResizablePanel
+                    id="explorer"
+                    order={1}
+                    defaultSize={20}
+                    minSize={12}
+                    maxSize={40}
+                    className="hidden md:block"
+                  >
+                    <div className="h-full w-full overflow-hidden border-r border-border bg-sidebar">
+                      {leftSidebarTab === "explorer" && <FileExplorer />}
+                      {leftSidebarTab === "identities" && (
+                        <IdentitiesView network={network} />
+                      )}
+                      {leftSidebarTab === "deployments" && (
+                        <DeploymentsView
+                          activeContractId={contractId}
+                          onSelectContract={(id, net) => {
+                            setContractId(id);
+                            setNetwork(net as NetworkKey);
+                            appendTerminalOutput(
+                              `Targeting contract ${id.substring(0, 8)}... on ${net}\r\n`,
+                            );
+                          }}
+                        />
+                      )}
+                      {leftSidebarTab === "search" && (
+                        <SearchPane
+                          inputRef={searchInputRef}
+                          onResultSelect={(pathParts, range) => {
+                            addTab(pathParts, pathParts[pathParts.length - 1]);
+                            setActiveTabPath(pathParts);
+                            window.dispatchEvent(
+                              new CustomEvent("ide:reveal-range", {
+                                detail: {
+                                  fileId: pathParts.join("/"),
+                                  pathParts,
+                                  range,
+                                },
+                              }),
+                            );
+                          }}
+                        />
+                      )}
+                    </div>
+                  </ResizablePanel>
+                  <ResizableHandle withHandle className="hidden md:flex" />
+                </>
+              )}
+
+              <ResizablePanel
+                id="main-content"
+                order={2}
+                minSize={30}
+                className="flex flex-col min-w-0"
+              >
+                <ResizablePanelGroup
+                  direction="vertical"
+                  autoSaveId="ide-editor-terminal"
+                >
+                  <ResizablePanel
+                    id="editor"
+                    order={1}
+                    defaultSize={75}
+                    minSize={30}
+                    className="flex flex-col min-w-0"
+                  >
+                    <EditorTabs />
+                    <div className="flex-1 overflow-hidden">
+                      <CodeEditor />
+                    </div>
+                  </ResizablePanel>
+
+                  {terminalExpanded ? (
+                    <>
+                      <ResizableHandle withHandle />
+                      <ResizablePanel
+                        id="terminal"
+                        order={2}
+                        defaultSize={25}
+                        minSize={10}
+                        className="flex flex-col min-w-0"
+                      >
+                        <Terminal />
+                      </ResizablePanel>
+                    </>
+                  ) : (
+                    <div className="shrink-0">
+                      <Terminal />
+                    </div>
+                  )}
+                </ResizablePanelGroup>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </div>
+
+          {/* Desktop Right Sidebar */}
           <div className="hidden md:flex shrink-0 z-10">
             {showPanel && (
               <>
@@ -937,6 +1278,12 @@ const Index = () => {
           </div>
         </div>
       </IdeShell>
+
+          </div>
+        </div>
+      </IdeShell>
+
+      <StatusBar />
     </div>
   );
 };

@@ -1,7 +1,11 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { FileNode, sampleContracts } from '@/lib/sample-contracts';
-import { NETWORK_CONFIG, NetworkKey, DEFAULT_CUSTOM_RPC } from '@/lib/networkConfig';
+import {
+  DEFAULT_CUSTOM_RPC,
+  NETWORK_CONFIG,
+  NetworkKey,
+} from "@/lib/networkConfig";
+import { FileNode, sampleContracts } from "@/lib/sample-contracts";
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 interface TabInfo {
   path: string[];
@@ -15,6 +19,13 @@ export interface WorkspaceTextFile {
 
 export type MobilePanel = "none" | "explorer" | "interact" | "deployments" | "identities";
 export type SidebarTab = "explorer" | "deployments" | "identities" | "search" | "tests";
+export type MobilePanel =
+  | "none"
+  | "explorer"
+  | "interact"
+  | "deployments"
+  | "identities";
+export type SidebarTab = "explorer" | "deployments" | "identities" | "search";
 export type BuildState = "idle" | "building" | "success" | "error";
 
 interface WorkspaceState {
@@ -29,6 +40,7 @@ interface WorkspaceState {
   horizonUrl: string;
   networkPassphrase: string;
   customRpcUrl: string;
+  customHeaders: CustomHeaders;
 
   // UI Layout State
   terminalExpanded: boolean;
@@ -65,9 +77,12 @@ interface WorkspaceState {
   setHorizonUrl: (url: string) => void;
   setNetworkPassphrase: (passphrase: string) => void;
   setCustomRpcUrl: (url: string) => void;
+  setCustomHeaders: (headers: CustomHeaders) => void;
 
   // UI Actions
-  setTerminalExpanded: (expanded: boolean | ((prev: boolean) => boolean)) => void;
+  setTerminalExpanded: (
+    expanded: boolean | ((prev: boolean) => boolean),
+  ) => void;
   setTerminalOutput: (output: string | ((prev: string) => string)) => void;
   setIsCompiling: (isCompiling: boolean) => void;
   setBuildState: (state: BuildState) => void;
@@ -98,7 +113,10 @@ const findNode = (nodes: FileNode[], pathParts: string[]): FileNode | null => {
   return null;
 };
 
-const findParent = (nodes: FileNode[], pathParts: string[]): FileNode[] | null => {
+const findParent = (
+  nodes: FileNode[],
+  pathParts: string[],
+): FileNode[] | null => {
   if (pathParts.length <= 1) return nodes;
   const parent = findNode(nodes, pathParts.slice(0, -1));
   return parent?.children ?? null;
@@ -143,6 +161,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       horizonUrl: NETWORK_CONFIG.testnet.horizon,
       networkPassphrase: NETWORK_CONFIG.testnet.passphrase,
       customRpcUrl: DEFAULT_CUSTOM_RPC,
+      customHeaders: {},
 
       // Initial UI State
       terminalExpanded: true,
@@ -231,6 +250,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
               : name.endsWith(".toml")
               ? "toml"
               : "text",
+                ? "toml"
+                : "text",
             content,
           });
           set({ files: nextFiles });
@@ -309,6 +330,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         const currentCustomRpc = get().customRpcUrl || DEFAULT_CUSTOM_RPC;
         const horizonUrl = network === "local" ? currentCustomRpc : config.horizon;
 
+        const horizonUrl =
+          network === "local" ? currentCustomRpc : config.horizon;
         set({
           network,
           horizonUrl,
@@ -317,12 +340,16 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       },
       setHorizonUrl: (horizonUrl) => set({ horizonUrl }),
       setNetworkPassphrase: (networkPassphrase) => set({ networkPassphrase }),
+      setHorizonUrl: (url) => set({ horizonUrl: url }),
+      setNetworkPassphrase: (passphrase) =>
+        set({ networkPassphrase: passphrase }),
       setCustomRpcUrl: (customRpcUrl) => {
         set({ customRpcUrl });
         if (get().network === "local") {
           set({ horizonUrl: customRpcUrl });
         }
       },
+      setCustomHeaders: (customHeaders) => set({ customHeaders }),
 
       // UI Actions Implementation
       setTerminalExpanded: (expanded) =>
@@ -347,7 +374,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       setCursorPos: (cursorPos) => set({ cursorPos }),
       setSaveStatus: (saveStatus) => set({ saveStatus }),
       setMobilePanel: (mobilePanel) => set({ mobilePanel }),
-      setIsExplorerDragActive: (isExplorerDragActive) => set({ isExplorerDragActive }),
+      setIsExplorerDragActive: (isExplorerDragActive) =>
+        set({ isExplorerDragActive }),
       setLeftSidebarTab: (leftSidebarTab) => set({ leftSidebarTab }),
       appendTerminalOutput: (chunk) =>
         set((state) => ({ terminalOutput: state.terminalOutput + chunk })),
@@ -356,10 +384,11 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       setHydrationComplete: (ready) => set({ hydrationComplete: ready }),
     }),
     {
-      name: 'stellar-suite-workspace-store',
+      name: "stellar-suite-workspace-store",
       partialize: (state) => ({
         network: state.network,
         customRpcUrl: state.customRpcUrl,
+        customHeaders: state.customHeaders,
         showExplorer: state.showExplorer,
         showPanel: state.showPanel,
         terminalExpanded: state.terminalExpanded,
@@ -374,4 +403,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       },
     }
   )
+);
+    },
+  ),
 );
