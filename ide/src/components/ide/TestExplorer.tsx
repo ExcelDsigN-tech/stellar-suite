@@ -42,7 +42,8 @@ interface TestResult extends TestGasProfile {
     memoryBytes: number;
     readonly?: boolean;
   };
-  duration?: number;
+  duration: number;
+  snapshotMismatch?: boolean;
 }
 
 interface TestExplorerProps {
@@ -158,24 +159,6 @@ export function TestExplorer({ onGasProfileUpdate }: TestExplorerProps) {
     }, 1500);
   };
 
-  let cursor = fileNode.children;
-
-  for (const mod of test.modulePath) {
-    let modNode = cursor.find(
-      (node): node is Extract<TreeNode, { type: "module" }> =>
-        node.type === "module" && node.label === mod
-    );
-
-    if (!modNode) {
-      modNode = {
-        id: `${fileNode.id}:mod:${test.modulePath.join("::")}:${mod}`,
-        type: "module",
-        label: mod,
-        children: [],
-      };
-      cursor.push(modNode);
-    }
-
   // Check if test exceeds threshold
   const isGasExcessive = (test: TestResult): boolean => {
     return test.gasMetrics ? test.gasMetrics.cpuInstructions > gasThreshold : false;
@@ -204,6 +187,17 @@ export function TestExplorer({ onGasProfileUpdate }: TestExplorerProps) {
         return 'secondary';
       default:
         return 'default';
+    }
+  };
+
+  const getStatusIcon = (status: TestResult['status']) => {
+    switch (status) {
+      case 'passed':
+        return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
+      case 'failed':
+        return <XCircle className="h-4 w-4 text-rose-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-amber-500" />;
     }
   };
 

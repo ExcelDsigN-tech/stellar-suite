@@ -3,6 +3,7 @@
 import { CommandPalette } from "@/components/ide/CommandPalette";
 import { MobileGatekeeper } from "@/components/ide/MobileGatekeeper";
 import { QuickOpen } from "@/components/ide/QuickOpen";
+import Index from "@/features/ide/Index";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";

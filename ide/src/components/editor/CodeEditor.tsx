@@ -10,6 +10,9 @@ import {
   RUST_FOLD_REGION_END,
   RUST_FOLD_REGION_START,
 } from "@/lib/rustFolding";
+import { RustSemanticTokensProvider } from "@/lib/semanticTokensProvider";
+import { definitionProvider } from "@/lib/definitionProvider";
+import { symbolIndexer } from "@/lib/symbolIndexer";
 import Editor, { OnChange, OnMount } from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
 import React, { Suspense, useEffect, useRef } from "react";

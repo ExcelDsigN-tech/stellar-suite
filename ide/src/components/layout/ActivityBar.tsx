@@ -23,7 +23,8 @@ export type ActivityTab =
   | "search"
   | "security"
   | "tests"
-  | "outline";
+  | "outline"
+  | "oracle";
 
 interface ActivityBarProps {
   activeTab: ActivityTab;

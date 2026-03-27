@@ -30,8 +30,10 @@ export function GitPane() {
     setDiffViewPath(path);
   };
 
-  const modifiedFiles = localRepoInitialized
-    ? Object.entries(localStatusMap).sort((a, b) => a[0].localeCompare(b[0]))
+  const modifiedFiles: Array<[string, GitFileStatus]> = localRepoInitialized
+    ? (Object.entries(localStatusMap) as Array<[string, GitFileStatus]>).sort((a, b) =>
+        a[0].localeCompare(b[0]),
+      )
     : Array.from(unsavedFiles).sort().map((path) => [path, "modified" as GitFileStatus]);
 
   return (
